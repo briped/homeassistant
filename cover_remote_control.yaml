@@ -20,10 +20,9 @@ blueprint:
       name: Cover
       description: The cover to control
       selector:
-        device:
-          integration: zha
-          manufacturer: "IKEA of Sweden"
-          model: "FYRTUR block-out rollder blind"
+        target:
+          entity:
+            domain: cover
     increment:
       name: Increments in %
       default: 5
