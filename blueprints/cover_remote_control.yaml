@@ -3,9 +3,11 @@ blueprint:
   description: |
     Control a cover with an IKEA TRÅDFRI open/close button remote over ZHA
 
-    Short press on open/☼ button will open the cover in steps of 5%.
-    Short press on close/☰ button will close the cover in steps of 5%.
-    Long press on ☼ or ☰  will stop the cover.
+    Short press on ☼ (up_open) button will open the cover in specified increments.
+    Short press on ☰ (close_down) button will close the cover in specified increments.
+
+    Long press on ☼ (open_up) will open the cover completely.
+    Long press on ☰ (close_down) will close the cover completely.
   domain: automation
   input:
     remote:
