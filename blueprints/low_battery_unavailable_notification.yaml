@@ -5,19 +5,17 @@ blueprint:
     Monitored devices with a 'battery' device-class will be checked for battery level.
 
     Notify if
-      'state.state' is 'on' (domain binary_sensor) or if 'state.state' is below percentage battery_threshold (domain sensor).
-    Monitored devices that are in 'unavailable' state.
+      'state.state' is 'on' (domain binary_sensor) or 'state.state' is less than battery_threshold (domain sensor).
+      'state.state' is 'unavailable'.
 
   domain: automation
 
-  source_url: 
-
-
+  source_url: https://raw.githubusercontent.com/briped/homeassistant/master/blueprints/low_battery_unavailable_notification.yaml
 
   input:
-    threshold:
+    battery_threshold:
       name: Battery warning level threshold
-      description: Battery sensors below threshold are assumed to be low-battery (as
+      description: Battery sensors below battery_threshold are assumed to be low-battery (as
         well as binary battery sensors with value 'on').
       default: 20
       selector:
@@ -44,38 +42,42 @@ blueprint:
           max: 7.0
           mode: slider
           step: 1.0
-    exclude:
-      name: Excluded Sensors
-      description: Battery sensors (e.g. smartphone) to exclude from detection. Only entities are supported, devices must be expanded!
-      default: {entity_id: []}
-      selector:
-        target:
-          entity:
-            device_class: battery
     actions:
       name: Actions
       description: Notifications or similar to be run. {{sensors}} is replaced with
         the names of sensors being low on battery.
       selector:
         action: {}
-  source_url: https://gist.github.com/sbyx/1f6f434f0903b872b84c4302637d0890
 variables:
   day: !input 'day'
-  threshold: !input 'threshold'
-  exclude: !input 'exclude'
+  battery_threshold: !input 'battery_threshold'
   sensors: >-
-    {% set result = namespace(sensors=[]) %}
-    {% for state in states.sensor | selectattr('attributes.device_class', '==', 'battery') %}
-      {% if 0 <= state.state | int(-1) < threshold | int and not state.entity_id in exclude.entity_id %}
-        {% set result.sensors = result.sensors + [state.name ~ ' (' ~ state.state ~ ' %)'] %}
+    {% set result = namespace(entities=[]) %}
+    {% set item_name = namespace(variables='') %}
+    {% set battery_threshold = namespace(variables=100) %}
+    {% for state in states %}
+      {% if area_name(state.entity_id) != None and area_name(state.entity_id)[0:1] != '_' %}
+        {% if device_attr(state.entity_id, 'name_by_user') != None %}
+          {% set item_name.variables = device_attr(state.entity_id, 'name_by_user') %}
+        {% elif device_attr(state.entity_id, 'name') != None %}
+          {% set item_name.variables = device_attr(state.entity_id, 'name') %}
+        {% else %}
+          {% set item_name.variables = state.name %}
+        {% endif %}
+        {% if state.state == 'unavailable' %}
+          {% set result.entities = result.entities + [(item_name.variables, device_id(state.entity_id), state.entity_id, state.state)] %}
+        {% else %}
+          {% if state_attr(state.entity_id, 'device_class') == 'battery' %}
+            {% if state.domain == 'binary_sensor' and state.state == 'on' %}
+              {% set result.entities = result.entities + [(item_name.variables, device_id(state.entity_id), state.entity_id, state.state)] %}
+            {% elif state.domain == 'sensor' and int(state.state) < battery_threshold.variables %}
+              {% set result.entities = result.entities + [(item_name.variables, device_id(state.entity_id), state.entity_id, state.state)] %}
+            {% endif %}
+          {% endif %}
+        {% endif %}
       {% endif %}
     {% endfor %}
-    {% for state in states.binary_sensor | selectattr('attributes.device_class', '==', 'battery') | selectattr('state', '==', 'on') %}
-      {% if not state.entity_id in exclude.entity_id %}
-        {% set result.sensors = result.sensors + [state.name] %}
-      {% endif %}
-    {% endfor %}
-    {{result.sensors|join(', ')}}
+    {{result.entities}}
 trigger:
 - platform: time
   at: !input 'time'
