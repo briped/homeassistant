@@ -1,66 +1,65 @@
 blueprint:
   name: Device/entity availability notification
-  description: Regularly check all entities for low battery or unavailability.
-    Device must be assigned to an area to be monitored. Areas with names beginning with underscore '_' will not be monitored.
-    Monitored devices with a 'battery' device-class will be checked for battery level.
+  description: |
+    Regularly checks all entities/devices for availability, and all entities/devices with the 'battery' device_class will be checked for battery level.
 
-    Notify if
-      'state.state' is 'on' (domain binary_sensor) or 'state.state' is less than battery_threshold (domain sensor).
-      'state.state' is 'unavailable'.
-
+    Devices/entities that are not assigned to an area, 
+      or are assigned to areas where the name begins with an underscore (_), 
+      or are explicitly excluded, will not be monitored.
+    To monitor devices that are not fixed to a specific area, simply create a pseudo-area, f.ex. "Roaming" and add the devices to that area.
   domain: automation
-
   source_url: https://raw.githubusercontent.com/briped/homeassistant/master/blueprints/low_battery_unavailable_notification.yaml
-
   input:
-    battery_threshold:
-      name: Battery warning level threshold
-      description: Battery sensors below battery_threshold are assumed to be low-battery (as
-        well as binary battery sensors with value 'on').
+    battery:
+      name: Battery level
+      description: Devices with battery level below the configured value, are assumed to be low-battery (as well as binary battery sensors with value 'on').
       default: 20
       selector:
         number:
           min: 5.0
           max: 100.0
-          unit_of_measurement: '%'
+          unit_of_measurement: "%"
           mode: slider
           step: 5.0
+    unavailable:
+      name: Check Unvailable?
+      description: Also return entities/devices that are unavailable.
+      default: false
+      selector:
+        boolean:
     time:
-      name: Time to test on
-      description: Test is run at configured time
-      default: '10:00:00'
+      name: Time of the day to run checks
+      description: Checks are run at the configured time.
+      default: "10:00:00"
       selector:
         time: {}
     day:
-      name: Weekday to test on
-      description: 'Test is run at configured time either everyday (0) or on a given
-        weekday (1: Monday ... 7: Sunday)'
-      default: 0
-      selector:
-        number:
-          min: 0.0
-          max: 7.0
-          mode: slider
-          step: 1.0
-    day_alt:
-      name: Weekday to test on (alt)
-      description: Check at the configured time, on the selected weekdays.
-      default: {}
+      name: Day(s) of the week to run checks
+      description: Checks are run on the selected day(s) of the week.
+      default: ["1", "2", "3", "4", "5", "6", "7"]
       selector:
         select:
           mode: dropdown
           multiple: true
+          custom_value: false
           options:
-            - Monday
-            - Tuesday
-            - Wednesday
-            - Thursday
-            - Friday
-            - Saturday
-            - Sunday
+            - label: Monday
+              value: "1"
+            - label: Tuesday
+              value: "2"
+            - label: Wednesday
+              value: "3"
+            - label: Thursday
+              value: "4"
+            - label: Friday
+              value: "5"
+            - label: Saturday
+              value: "6"
+            - label: Sunday
+              value: "7"
     exclude:
-      name: Excluded Devices/Areas
-      description: Devices and/or Areas to exclude from monitoring.
+      name: Exclusions
+      description: Areas/devices/entities to exclude from monitoring.
       default: {}
       selector:
         target:
@@ -68,57 +67,90 @@ blueprint:
             device_class: battery
     actions:
       name: Actions
-      description: Notifications or similar to be run. {{sensors}} is replaced with
-        the names of sensors being low on battery.
+      description: >
+        Actions to run, such as notifications. Matched devices are returned with the <code>{{items}}</code> dictionary.
       selector:
         action: {}
 variables:
-  day: !input 'day'
-  battery_threshold: !input 'battery_threshold'
-  exclude: !input 'exclude'
-  sensors: >-
+  day: !input day
+  battery: !input battery
+  unavailable: !input  unavailable
+  exclude: !input exclude
+  items: >
     {% set entities = namespace(data=[]) %}
     {% set devices = namespace(data=[]) %}
 
-    {% set battery_threshold = namespace(variables=50) %}
+    {% if unavailable %}
+      {# Loop through all entities with state == unavailable. #}
+      {% for state in states 
+        | selectattr('state', 'eq', 'unavailable') %}
+        {% if area_id(state.entity_id) != None 
+          and area_name(state.entity_id)[0:1] != '_'
+          and (exclude.entity_id is defined 
+            and state.entity_id not in exclude.entity_id)
+          and (exclude.area_id is defined 
+            and area_id(state.entity_id) not in exclude.area_id) %}
+          {# Add found entities to dictionary. #}
+          {% set entities.data = entities.data + [{'entity_id': state.entity_id, 'device_id': device_id(state.entity_id), 'area_id': area_id(state.entity_id), 'state': state.state}] %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
 
-    {# Loop through all entities with state == unavailable. #}
-    {% for state in states 
-      | selectattr('state', '==', 'unavailable') %}
-      {# Add found entities to dictionary. #}
-      {% set entities.data = entities.data + [{'entity_id': state.entity_id, 'device_id': device_id(state.entity_id), 'state': state.state}] %}
-    {% endfor %}
-
-    {# Loop through all binary_sensors with the 'battery' device_class. #}
-    {% for state in states.binary_sensor
+    {# Loop through all binary_sensor entities with the 'battery' device_class. #}
+    {% for state in states.binary_sensor 
       | rejectattr('attributes.device_class', 'undefined') 
       | selectattr('attributes.device_class', 'eq', 'battery') 
-      | selectattr('state', '==', 'on') %}
-      {# Add found entities to dictionary. #}
-      {% set entities.data = entities.data + [{'entity_id': state.entity_id, 'device_id': device_id(state.entity_id), 'state': state.state}] %}
+      | selectattr('state', 'eq', 'on') %}
+      {% if area_id(state.entity_id) != None 
+        and area_name(state.entity_id)[0:1] != '_'
+        and (exclude.entity_id is defined 
+          and state.entity_id not in exclude.entity_id)
+        and (exclude.area_id is defined 
+          and area_id(state.entity_id) not in exclude.area_id) %}
+        {# Add found entities to dictionary. #}
+        {% set entities.data = entities.data + [{'entity_id': state.entity_id, 'device_id': device_id(state.entity_id), 'area_id': area_id(state.entity_id), 'state': state.state}] %}
+      {% endif %}
     {% endfor %}
 
-    {#
-    {{entities.data | unique(attribute='device_id') | list}}
-    #}
+    {# Loop through all sensor entities with the 'battery' device_class. #}
+    {% for state in states.sensor
+      | rejectattr('state', 'eq', 'unavailable') 
+      | rejectattr('attributes.device_class', 'undefined') 
+      | selectattr('attributes.device_class', 'eq', 'battery') -%}
+
+      {% if area_id(state.entity_id) != None 
+        and area_name(state.entity_id)[0:1] != '_'
+        and (exclude.entity_id is defined 
+          and state.entity_id not in exclude.entity_id) 
+        and (exclude.area_id is defined 
+          and area_id(state.entity_id) not in exclude.area_id)
+        and (state.state | int) < (battery | int) %}
+        {# Add found entities to dictionary. #}
+        {% set entities.data = entities.data + [{'entity_id': state.entity_id, 'device_id': device_id(state.entity_id), 'area_id': area_id(state.entity_id), 'state': state.state}] %}
+      {% endif %}
+    {% endfor %}
 
     {# Loop through all unique devices from the entities dictionary. #}
     {% for entity in entities.data 
       | unique(attribute='device_id') %}
-      {% if area_name(state.entity_id) != None and area_name(state.entity_id)[0:1] != '_' %}
+      {% if area_id(entity.device_id) != None 
+        and area_name(entity.device_id)[0:1] != '_'
+        and (exclude.device_id is defined 
+          and entity.device_id not in exclude.device_id)
+        and (exclude.area_id is defined 
+          and area_id(entity.device_id) not in exclude.area_id)
+        and (entity.state | int(-1)) < (battery | int) %}
         {# Add devices to dictionary, if not excluded. TODO: Add area and device exclusion. #}
-        {% set devices.data = devices.data + [{'device_id': entity.device_id, 'device_name': device_attr(entity.entity_id, 'name'), 'state': entity.state}] %}
+        {% set devices.data = devices.data + [{'device_id': entity.device_id, 'device_name': device_attr(entity.entity_id, 'name'), 'area_id': area_id(entity.entity_id), 'state': entity.state}] %}
       {% endif %}
     {% endfor %}
-
     {{devices.data}}
-
 trigger:
-- platform: time
-  at: !input 'time'
+  - platform: time
+    at: !input time
 condition:
-- '{{ sensors != '''' and (day | int == 0 or day | int == now().isoweekday()) }}'
+  -  "{{ items != '' and (day | int == 0 or day | int == now().isoweekday()) }}"
 action:
-- choose: []
-  default: !input 'actions'
+  - choose: []
+    default: !input actions
 mode: single
