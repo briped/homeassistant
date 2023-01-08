@@ -42,6 +42,15 @@ blueprint:
           max: 7.0
           mode: slider
           step: 1.0
+    exclude:
+      name: Excluded Devices/Areas
+      description: Devices and/or Areas to exclude from monitoring.
+      default: {}
+      selector:
+        target:
+          device:
+          entity:
+            device_class: battery
     actions:
       name: Actions
       description: Notifications or similar to be run. {{sensors}} is replaced with
@@ -51,33 +60,44 @@ blueprint:
 variables:
   day: !input 'day'
   battery_threshold: !input 'battery_threshold'
+  exclude: !input 'exclude'
   sensors: >-
-    {% set result = namespace(entities=[]) %}
-    {% set item_name = namespace(variables='') %}
-    {% set battery_threshold = namespace(variables=100) %}
-    {% for state in states %}
+    {% set entities = namespace(data=[]) %}
+    {% set devices = namespace(data=[]) %}
+
+    {% set battery_threshold = namespace(variables=50) %}
+
+    {# Loop through all entities with state == unavailable. #}
+    {% for state in states 
+      | selectattr('state', '==', 'unavailable') %}
+      {# Add found entities to dictionary. #}
+      {% set entities.data = entities.data + [{'entity_id': state.entity_id, 'device_id': device_id(state.entity_id), 'state': state.state}] %}
+    {% endfor %}
+
+    {# Loop through all binary_sensors with the 'battery' device_class. #}
+    {% for state in states.binary_sensor
+      | rejectattr('attributes.device_class', 'undefined') 
+      | selectattr('attributes.device_class', 'eq', 'battery') 
+      | selectattr('state', '==', 'on') %}
+      {# Add found entities to dictionary. #}
+      {% set entities.data = entities.data + [{'entity_id': state.entity_id, 'device_id': device_id(state.entity_id), 'state': state.state}] %}
+    {% endfor %}
+
+    {#
+    {{entities.data | unique(attribute='device_id') | list}}
+    #}
+
+    {# Loop through all unique devices from the entities dictionary. #}
+    {% for entity in entities.data 
+      | unique(attribute='device_id') %}
       {% if area_name(state.entity_id) != None and area_name(state.entity_id)[0:1] != '_' %}
-        {% if device_attr(state.entity_id, 'name_by_user') != None %}
-          {% set item_name.variables = device_attr(state.entity_id, 'name_by_user') %}
-        {% elif device_attr(state.entity_id, 'name') != None %}
-          {% set item_name.variables = device_attr(state.entity_id, 'name') %}
-        {% else %}
-          {% set item_name.variables = state.name %}
-        {% endif %}
-        {% if state.state == 'unavailable' %}
-          {% set result.entities = result.entities + [(item_name.variables, device_id(state.entity_id), state.entity_id, state.state)] %}
-        {% else %}
-          {% if state_attr(state.entity_id, 'device_class') == 'battery' %}
-            {% if state.domain == 'binary_sensor' and state.state == 'on' %}
-              {% set result.entities = result.entities + [(item_name.variables, device_id(state.entity_id), state.entity_id, state.state)] %}
-            {% elif state.domain == 'sensor' and int(state.state) < battery_threshold.variables %}
-              {% set result.entities = result.entities + [(item_name.variables, device_id(state.entity_id), state.entity_id, state.state)] %}
-            {% endif %}
-          {% endif %}
-        {% endif %}
+        {# Add devices to dictionary, if not excluded. TODO: Add area and device exclusion. #}
+        {% set devices.data = devices.data + [{'device_id': entity.device_id, 'device_name': device_attr(entity.entity_id, 'name'), 'state': entity.state}] %}
       {% endif %}
     {% endfor %}
-    {{result.entities}}
+
+    {{devices.data}}
+
 trigger:
 - platform: time
   at: !input 'time'
