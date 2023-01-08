@@ -51,20 +51,13 @@ blueprint:
           mode: dropdown
           multiple: true
           options:
-            - label: Monday
-              value: '1'
-            - label: Tuesday
-              value: '2'
-            - label: Wednesday
-              value: '3'
-            - label: Thursday
-              value: '4'
-            - label: Friday
-              value: '5'
-            - label: Saturday
-              value: '6'
-            - label: Sunday
-              value: '7'
+            - Monday
+            - Tuesday
+            - Wednesday
+            - Thursday
+            - Friday
+            - Saturday
+            - Sunday
     exclude:
       name: Excluded Devices/Areas
       description: Devices and/or Areas to exclude from monitoring.
