@@ -42,6 +42,29 @@ blueprint:
           max: 7.0
           mode: slider
           step: 1.0
+    day_alt:
+      name: Weekday to test on (alt)
+      description: Check at the configured time, on the selected weekdays
+      default: [7]
+      selector:
+        select:
+          mode: dropdown
+          multiple: true
+          options:
+            - label: Monday
+              value: 1
+            - label: Tuesday
+              value: 2
+            - label: Wednesday
+              value: 3
+            - label: Thursday
+              value: 4
+            - label: Friday
+              value: 5
+            - label: Saturday
+              value: 6
+            - label: Sunday
+              value: 7
     exclude:
       name: Excluded Devices/Areas
       description: Devices and/or Areas to exclude from monitoring.
