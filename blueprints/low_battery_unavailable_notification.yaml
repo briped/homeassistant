@@ -44,8 +44,8 @@ blueprint:
           step: 1.0
     day_alt:
       name: Weekday to test on (alt)
-      description: Check at the configured time, on the selected weekdays
-      default: [7]
+      description: Check at the configured time, on the selected weekdays. Invalid blueprint expected str for dictionary value @ data['blueprint']['input']['day_alt']['selector']['options'][0]['value']. Got None
+      default: {}
       selector:
         select:
           mode: dropdown
