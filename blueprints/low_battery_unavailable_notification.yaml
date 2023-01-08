@@ -48,7 +48,6 @@ blueprint:
       default: {}
       selector:
         target:
-          device:
           entity:
             device_class: battery
     actions:
