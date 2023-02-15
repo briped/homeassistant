@@ -1,0 +1,213 @@
+blueprint:
+  name: Device Availability Checker
+  description: |2
+    Checks all entities/devices for availability, and all entities/devices
+    with the 'battery' device_class for battery level.
+
+    Devices/entities that are not assigned to an area, 
+        or are assigned to areas where the name begins with an underscore (_), 
+        or are explicitly excluded, will not be monitored.
+    To monitor devices that are not fixed to a specific area, simply create a pseudo-area, such as "Roaming" or "Nowhere" and add the devices to that area.
+  domain: automation
+  source_url: https://raw.githubusercontent.com/briped/homeassistant/master/blueprints/device_availability_checker.yaml
+  input:
+    check_battery:
+      name: Battery warning level
+      description: Devices with battery level below the configured value, are assumed to be low-battery (as well as binary battery sensors with value 'on').
+      default: 20
+      selector:
+        number:
+          min: 5.0
+          max: 100.0
+          unit_of_measurement: "%"
+          mode: slider
+          step: 5.0
+    check_unavailable:
+      name: Check Unvailable?
+      description: Also return entities/devices that are unavailable.
+      default: false
+      selector:
+        boolean:
+    trigger_time:
+      name: Time of the day(s) to checks.
+      description: Checks are run at the specified time of the day.
+      default: "10:00:00"
+      selector:
+        time:
+    trigger_day:
+      name: Day(s) of the week to checks.
+      description: Checks are run on the selected day(s) of the week.
+      default:
+        - "1" # Monday
+        - "2" # Tuesday
+        - "3" # Wednesday
+        - "4" # Thursday
+        - "5" # Friday
+        - "6" # Saturday
+        - "7" # Sunday
+      selector:
+        select:
+          mode: dropdown
+          multiple: true
+          custom_value: false
+          options:
+            - label: Monday
+              value: "1"
+            - label: Tuesday
+              value: "2"
+            - label: Wednesday
+              value: "3"
+            - label: Thursday
+              value: "4"
+            - label: Friday
+              value: "5"
+            - label: Saturday
+              value: "6"
+            - label: Sunday
+              value: "7"
+    exclude:
+      name: Exclusions
+      description: Areas/devices/entities to exclude from monitoring.
+      default: []
+      selector:
+        target:
+          entity:
+            device_class: battery
+    actions:
+      name: Actions
+      description: Actions to run, such as notifications. Matched devices are returned with the <code>{{items}}</code> dictionary.
+      selector:
+        action:
+variables:
+  trigger_day: !input trigger_day
+  check_battery: !input check_battery
+  check_unavailable: !input check_unavailable
+  exclude: !input exclude
+  items: >
+    {% set entities = namespace(data=[]) %}
+    {% set devices = namespace(data=[]) %}
+
+    {% if check_unavailable is defined 
+      and check_unavailable == true %}
+      {# Loop through all entities with state == unavailable. #}
+      {% for state in states 
+        | selectattr('state', 'eq', 'unavailable') %}
+        {% set add_entity = true %}
+        {% if area_id(state.entity_id) == None
+          or area_name(state.entity_id)[0:1] == '_' %}
+          {% set add_entity = false %}
+        {% endif %}
+        {% if exclude is defined %}
+          {% if exclude.entity_id is defined 
+            and state.entity_id in exclude.entity_id %}
+            {% set add_entity = false %}
+          {% endif %}
+          {% if exclude.area_id is defined 
+            and area_id(state.entity_id) in exclude.area_id %}
+            {% set add_entity = false %}
+          {% endif %}
+        {% endif %}
+
+        {% if add_entity == true %}
+          {# Add found entities to array. #}
+          {% set entities.data = entities.data + [{'entity_id': state.entity_id, 'device_id': device_id(state.entity_id), 'area_id': area_id(state.entity_id), 'state': state.state}] %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+
+    {# Loop through all binary_sensor entities with the 'battery' device_class. #}
+    {% for state in states.binary_sensor 
+      | rejectattr('attributes.device_class', 'undefined') 
+      | selectattr('attributes.device_class', 'eq', 'battery') 
+      | selectattr('state', 'eq', 'on') %}
+      {% set add_entity = true %}
+      {% if area_id(state.entity_id) == None
+        or area_name(state.entity_id)[0:1] == '_' %}
+        {% set add_entity = false %}
+      {% endif %}
+      {% if exclude is defined %}
+        {% if exclude.entity_id is defined 
+          and state.entity_id in exclude.entity_id %}
+          {% set add_entity = false %}
+        {% endif %}
+        {% if exclude.area_id is defined 
+          and area_id(state.entity_id) in exclude.area_id %}
+          {% set add_entity = false %}
+        {% endif %}
+      {% endif %}
+
+      {% if add_entity == true %}
+        {# Add found entities to array. #}
+        {% set entities.data = entities.data + [{'entity_id': state.entity_id, 'device_id': device_id(state.entity_id), 'area_id': area_id(state.entity_id), 'state': state.state}] %}
+      {% endif %}
+    {% endfor %}
+
+    {# Loop through all sensor entities with the 'battery' device_class. #}
+    {% for state in states.sensor
+      | rejectattr('state', 'eq', 'unavailable') 
+      | rejectattr('attributes.device_class', 'undefined') 
+      | selectattr('attributes.device_class', 'eq', 'battery') %}
+      {% set add_entity = true %}
+      {% if area_id(state.entity_id) == None
+        or area_name(state.entity_id)[0:1] == '_' %}
+        {% set add_entity = false %}
+      {% endif %}
+      {% if exclude is defined %}
+        {% if exclude.entity_id is defined 
+          and state.entity_id in exclude.entity_id %}
+          {% set add_entity = false %}
+        {% endif %}
+        {% if exclude.area_id is defined 
+          and area_id(state.entity_id) in exclude.area_id %}
+          {% set add_entity = false %}
+        {% endif %}
+      {% endif %}
+      {% if check_battery is defined
+        and (state.state | int) >= (check_battery | int) %}
+        {% set add_entity = false %}
+      {% endif %}
+
+      {% if add_entity == true %}
+        {# Add found entities to array. #}
+        {% set entities.data = entities.data + [{'entity_id': state.entity_id, 'device_id': device_id(state.entity_id), 'area_id': area_id(state.entity_id), 'state': state.state}] %}
+      {% endif %}
+    {% endfor %}
+
+    {# Loop through all unique devices from the entities array. #}
+    {% for entity in entities.data 
+      | unique(attribute='device_id') %}
+      {% set add_entity = true %}
+      {% if area_id(entity.device_id) == None 
+        or area_name(entity.device_id)[0:1] == '_' %}
+        {% set add_entity = false %}
+      {% endif %}
+      {% if exclude is defined %}
+        {% if exclude.device_id is defined 
+          and entity.device_id in exclude.device_id %}
+          {% set add_entity = false %}
+        {% endif %}
+        {% if exclude.area_id is defined 
+          and area_id(entity.device_id) in exclude.area_id %}
+          {% set add_entity = false %}
+        {% endif %}
+      {% endif %}
+      {% if check_battery is defined
+        and (entity.state | int(-1)) >= (check_battery | int) %}
+        {% set add_entity = false %}
+      {% endif %}
+
+      {% if add_entity == true %}
+        {# Add device to array. #}
+        {% set devices.data = devices.data + [{'device_id': entity.device_id, 'device_name': device_attr(entity.entity_id, 'name'), 'area_id': area_id(entity.entity_id), 'state': entity.state}] %}
+      {% endif %}
+    {% endfor %}
+    {{devices.data}}
+trigger:
+  - platform: time
+    at: !input trigger_time
+condition:
+  - "{{ items != '' and (trigger_day | int == now().isoweekday()) }}"
+action:
+  - choose: []
+    default: !input actions
+mode: single
