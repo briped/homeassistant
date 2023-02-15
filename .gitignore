@@ -11,9 +11,9 @@ Thumbs.db
 .*
 !.gitignore
 
+# code-workspace files
+*.code-workspace
+
 # ignore all test files anf folders
 test*
 Test*
-
-# Ignore specific files
-homeassistant.code-workspace
