@@ -149,7 +149,7 @@ trigger:
   - platform: time
     at: !input time
 condition:
-  -  "{{ items != '' and (day | int == 0 or day | int == now().isoweekday()) }}"
+  -  "{{ items != '' and (day | int == now().isoweekday()) }}"
 action:
   - choose: []
     default: !input actions
