@@ -1,0 +1,128 @@
+blueprint:
+  name: Certificate Expiration Checker
+  description: |
+    Checks all Certificate Expiry sensors for expiration and executes defined Action(s) for those that expire within defined Warning Period.
+
+    Requires the use of the Certificate Expiry integration: https://www.home-assistant.io/integrations/cert_expiry/
+  domain: automation
+  source_url: https://raw.githubusercontent.com/briped/homeassistant/master/blueprints/certificate_expiry_alerts.yaml
+  input:
+    check_duration:
+      name: Warning period.
+      description: Amount of time before certificate(s) expire, the defined action(s) should be executed.
+      default:
+        days: 7
+        hours: 1
+        minutes: 0
+        seconds: 0
+      selector:
+        duration:
+          enable_day: true
+    trigger_time:
+      name: Time of the day(s) to check.
+      description: Checks are run at the specified time of the day.
+      default: "10:00:00"
+      selector:
+        time:
+    trigger_day:
+      name: Day(s) of the week to check.
+      description: Checks are run on the selected day(s) of the week.
+      default:
+        - "1" # Monday
+        - "2" # Tuesday
+        - "3" # Wednesday
+        - "4" # Thursday
+        - "5" # Friday
+        - "6" # Saturday
+        - "7" # Sunday
+      selector:
+        select:
+          mode: dropdown
+          multiple: true
+          custom_value: false
+          options:
+            - label: Monday
+              value: "1"
+            - label: Tuesday
+              value: "2"
+            - label: Wednesday
+              value: "3"
+            - label: Thursday
+              value: "4"
+            - label: Friday
+              value: "5"
+            - label: Saturday
+              value: "6"
+            - label: Sunday
+              value: "7"
+    actions:
+      name: Actions
+      description: >
+        Action(s) to run, such as notifications. Matched devices are returned with the <code>{{items}}</code> dictionary.
+      selector:
+        action:
+variables:
+  trigger_day: !input trigger_day
+  check_duration: !input check_duration
+  items: >
+    {# Dictionary array, to store all resulting entities and states. #}
+    {% set entities = namespace(data=[]) %}
+
+    {# Loop through all sensors, excluding those with a state of "unavailable" or "unknown", and where the entity_id is defined and matches "sensor.cert_expiry_timestamp*" #}
+    {% for state in states.sensor
+      | rejectattr('state', 'eq', 'unavailable') 
+      | rejectattr('state', 'eq', 'unknown') 
+      | selectattr('entity_id', 'defined') 
+      | selectattr('entity_id', 'match', '^sensor\.cert_expiry_timestamp') %}
+
+      {# Check if the current certificate is within the warning period. #}
+      {% if (now() + timedelta(days = check_duration.days, hours = check_duration.hours, minutes = check_duration.minutes, seconds = check_duration.seconds)) >= as_datetime(state.state) %}
+        {# Set the hostname (with :port, if non-standard). #}
+        {% set host = state.name 
+          | replace('Cert Expiry Timestamp (', '') 
+          | replace(')', '') %}
+        {# Set the default portnumber. #}
+        {% set port = 443 %}
+        {# Check if the hostname includes portnumber. #}
+        {% if ':' in host %}
+          {# Set the hostname and portnumber as parsed. #}
+          {% set host, port = host.split(':') %}
+        {% endif %}
+        {% set delta = as_datetime(state.state) - now() %}
+        {% if delta.days > 0 %}
+          {# Set the relative time to day(s). #}
+          {% set relative_time = delta.days ~ iif(delta.days == 1, ' day', ' days') %}
+        {% else %}
+          {# Split delta into hours, minutes, seconds. #}
+          {% set hours, minutes, seconds = (delta | string).split(':') %}
+          {# Split seconds into seconds, microseconds. #}
+          {% set seconds, microseconds = seconds.split('.') %}
+          {% if (hours | int) == 0 and (minutes | int) == 0 and (seconds | int) > 0 %}
+            {# Set the relative time to second(s). #}
+            {% set relative_time = seconds ~ iif(seconds == 1, ' second', ' seconds') %}
+          {% endif %}
+          {% if (hours | int) == 0 and (minutes | int) > 0 %}
+            {# Set the relative time to minute(s). #}
+            {% set relative_time = minutes ~ iif(minutes == 1, ' minute', ' minutes') %}
+          {% endif %}
+          {% if (hours | int) > 0 %}
+            {# Set the relative time to hour(s). #}
+            {% set relative_time = hours ~ iif(hours == 1, ' hour', ' hours') %}
+          {% endif %}
+        {% endif %}
+        {# Add the expiring certificate entity_id and state to the dictionary array. #}
+        {% set entities.data = entities.data + [{'host': host, 'port': port, 'relative_time': relative_time, 'entity_id': state.entity_id, 'state': state.state}] %}
+      {% endif %}
+    {% endfor %}
+
+    {# Return the dictionary array. #}
+    {{entities.data}}
+trigger:
+  - platform: time
+    at: !input trigger_time
+condition:
+  - "{{ items != '' and (trigger_day | int == now().isoweekday()) }}"
+action:
+  - choose: []
+    default: !input actions
+mode: single
