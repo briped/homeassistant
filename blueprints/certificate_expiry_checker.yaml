@@ -17,7 +17,7 @@ blueprint:
         seconds: 0
       selector:
         duration:
-          enable_day: true
+          enable_days: true
     trigger_time:
       name: Time of the day(s) to check.
       description: Checks are run at the specified time of the day.
@@ -121,7 +121,7 @@ trigger:
   - platform: time
     at: !input trigger_time
 condition:
-  - "{{ items != '' and (trigger_day | int == now().isoweekday()) }}"
+  - "{{ items | length > 0 and (trigger_day | int == now().isoweekday()) }}"
 action:
   - choose: []
     default: !input actions
