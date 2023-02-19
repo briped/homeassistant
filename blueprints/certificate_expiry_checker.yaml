@@ -17,7 +17,7 @@ blueprint:
         seconds: 0
       selector:
         duration:
-          enable_days: true
+          enable_day: true
     trigger_time:
       name: Time of the day(s) to check.
       description: Checks are run at the specified time of the day.
@@ -70,24 +70,25 @@ variables:
 
     {# Loop through all sensors, excluding those with a state of "unavailable" or "unknown", and where the entity_id is defined and matches "sensor.cert_expiry_timestamp*" #}
     {% for state in states.sensor
-      | rejectattr('state', 'eq', 'unavailable') 
-      | rejectattr('state', 'eq', 'unknown') 
       | selectattr('entity_id', 'defined') 
       | selectattr('entity_id', 'match', '^sensor\.cert_expiry_timestamp') %}
-
+      {# Set the hostname (with :port, if non-standard). #}
+      {% set host = state.name 
+        | replace('Cert Expiry Timestamp (', '') 
+        | replace(')', '') %}
+      {# Set the default portnumber. #}
+      {% set port = 443 %}
+      {# Check if the hostname includes portnumber. #}
+      {% if ':' in host %}
+        {# Set the hostname and portnumber as parsed. #}
+        {% set host, port = host.split(':') %}
+      {% endif %}
       {# Check if the current certificate is within the warning period. #}
-      {% if (now() + timedelta(days = check_duration.days, hours = check_duration.hours, minutes = check_duration.minutes, seconds = check_duration.seconds)) >= as_datetime(state.state) %}
-        {# Set the hostname (with :port, if non-standard). #}
-        {% set host = state.name 
-          | replace('Cert Expiry Timestamp (', '') 
-          | replace(')', '') %}
-        {# Set the default portnumber. #}
-        {% set port = 443 %}
-        {# Check if the hostname includes portnumber. #}
-        {% if ':' in host %}
-          {# Set the hostname and portnumber as parsed. #}
-          {% set host, port = host.split(':') %}
-        {% endif %}
+      {% if state_attr(state.entity_id, 'is_valid') 
+          and (now() + timedelta(
+            days = check_duration.days, hours = check_duration.hours, 
+            minutes = check_duration.minutes, seconds = check_duration.seconds
+          )) >= as_datetime(state.state) %}
         {% set delta = as_datetime(state.state) - now() %}
         {% if delta.days > 0 %}
           {# Set the relative time to day(s). #}
@@ -111,7 +112,25 @@ variables:
           {% endif %}
         {% endif %}
         {# Add the expiring certificate entity_id and state to the dictionary array. #}
-        {% set entities.data = entities.data + [{'host': host, 'port': port, 'relative_time': relative_time, 'entity_id': state.entity_id, 'state': state.state}] %}
+        {% set entities.data = entities.data + [{ 
+            'host': host, 
+            'port': port, 
+            'relative_time': relative_time, 
+            'is_valid': state_attr(state.entity_id, 'is_valid'), 
+            'error': 'certificate expires in {{ relative_time }}',
+            'entity_id': state.entity_id, 
+            'state': state.state }] %}
+      {% endif %}
+      {% if not state_attr(state.entity_id, 'is_valid') %}
+        {% set relative_time = '-1' %}
+        {% set entities.data = entities.data + [{ 
+            'host': host, 
+            'port': port, 
+            'relative_time': relative_time, 
+            'is_valid': state_attr(state.entity_id, 'is_valid'), 
+            'error': state_attr(state.entity_id, 'error'),
+            'entity_id': state.entity_id, 
+            'state': state.state }] %}
       {% endif %}
     {% endfor %}
 
