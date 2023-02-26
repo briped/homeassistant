@@ -110,7 +110,11 @@ variables:
 
         {% if add_entity == true %}
           {# Add found entities to array. #}
-          {% set entities.data = entities.data + [{'entity_id': state.entity_id, 'device_id': device_id(state.entity_id), 'area_id': area_id(state.entity_id), 'state': state.state}] %}
+          {% set entities.data = entities.data 
+            + [{'entity_id': state.entity_id, 
+                'device_id': device_id(state.entity_id), 
+                'area_id': area_id(state.entity_id), 
+                'state': state.state}] %}
         {% endif %}
       {% endfor %}
     {% endif %}
@@ -138,7 +142,11 @@ variables:
 
       {% if add_entity == true %}
         {# Add found entities to array. #}
-        {% set entities.data = entities.data + [{'entity_id': state.entity_id, 'device_id': device_id(state.entity_id), 'area_id': area_id(state.entity_id), 'state': state.state}] %}
+        {% set entities.data = entities.data 
+          + [{'entity_id': state.entity_id, 
+              'device_id': device_id(state.entity_id), 
+              'area_id': area_id(state.entity_id), 
+              'state': state.state}] %}
       {% endif %}
     {% endfor %}
 
@@ -169,7 +177,11 @@ variables:
 
       {% if add_entity == true %}
         {# Add found entities to array. #}
-        {% set entities.data = entities.data + [{'entity_id': state.entity_id, 'device_id': device_id(state.entity_id), 'area_id': area_id(state.entity_id), 'state': state.state}] %}
+        {% set entities.data = entities.data + 
+          [{'entity_id': state.entity_id, 
+            'device_id': device_id(state.entity_id), 
+            'area_id': area_id(state.entity_id), 
+            'state': state.state}] %}
       {% endif %}
     {% endfor %}
 
@@ -197,8 +209,23 @@ variables:
       {% endif %}
 
       {% if add_entity == true %}
+        {# Set default friendly_name. #}
+        {% set device_friendly_name = device_attr(entity.device_id, 'name') %}
+        {% if state_attr(entity.entity_id, 'friendly_name') %}
+          {# Set to entity friendly_name. #}
+          {% set device_friendly_name = state_attr(entity.entity_id, 'friendly_name') %}
+        {% endif %}
+        {% if device_attr(entity.device_id, 'name_by_user') %}
+          {# Set to user given friendly_name. #}
+          {% set device_friendly_name = device_attr(entity.device_id, 'name_by_user') %}
+        {% endif %}
         {# Add device to array. #}
-        {% set devices.data = devices.data + [{'device_id': entity.device_id, 'device_name': device_attr(entity.entity_id, 'name'), 'area_id': area_id(entity.entity_id), 'state': entity.state}] %}
+        {% set devices.data = devices.data 
+          + [{'device_id': entity.device_id, 
+              'device_name': device_attr(entity.entity_id, 'name'), 
+              'friendly_name': device_friendly_name, 
+              'area_id': area_id(entity.entity_id), 
+              'state': entity.state}] %}
       {% endif %}
     {% endfor %}
     {{devices.data}}
