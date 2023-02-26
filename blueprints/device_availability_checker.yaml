@@ -206,7 +206,7 @@ trigger:
   - platform: time
     at: !input trigger_time
 condition:
-  - "{{ ((devices.data | length) > 0) and ((now().isoweekday() | int) == (trigger_day[now().isoweekday()-1] | int)) }}"
+  - "{{ ((items | length) > 0) and ((now().isoweekday() | int) == (trigger_day[now().isoweekday()-1] | int)) }}"
 action:
   - choose: []
     default: !input actions
