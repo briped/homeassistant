@@ -71,8 +71,6 @@ blueprint:
       default: []
       selector:
         target:
-          entity:
-            device_class: battery
     actions:
       name: Actions
       description: Actions to run, such as notifications. Matched devices are returned with the <code>{{items}}</code> dictionary.
@@ -171,7 +169,7 @@ variables:
         {% endif %}
       {% endif %}
       {% if check_battery is defined
-        and (state.state | int) >= (check_battery | int) %}
+        and (state.state | int(-1)) >= (check_battery | int(0)) %}
         {% set add_entity = false %}
       {% endif %}
 
@@ -204,7 +202,7 @@ variables:
         {% endif %}
       {% endif %}
       {% if check_battery is defined
-        and (entity.state | int(-1)) >= (check_battery | int) %}
+        and (entity.state | int(-1)) >= (check_battery | int(0)) %}
         {% set add_entity = false %}
       {% endif %}
 
@@ -233,7 +231,7 @@ trigger:
   - platform: time
     at: !input trigger_time
 condition:
-  - "{{ ((items | length) > 0) and ((now().isoweekday() | int) == (trigger_day[now().isoweekday()-1] | int)) }}"
+  - "{{ ((items | length) > 0) and ((now().isoweekday() | int(0)) == (trigger_day[now().isoweekday()-1] | int(0))) }}"
 action:
   - choose: []
     default: !input actions
