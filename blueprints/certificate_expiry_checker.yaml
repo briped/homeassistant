@@ -92,7 +92,7 @@ variables:
         {% set delta = as_datetime(state.state) - now() %}
         {% if delta.days > 0 %}
           {# Set the relative time to day(s). #}
-          {% set relative_time = delta.days ~ iif(delta.days == 1, ' day', ' days') %}
+          {% set rel_time = delta.days ~ iif(delta.days == 1, ' day', ' days') %}
         {% else %}
           {# Split delta into hours, minutes, seconds. #}
           {% set hours, minutes, seconds = (delta | string).split(':') %}
@@ -100,33 +100,33 @@ variables:
           {% set seconds, microseconds = seconds.split('.') %}
           {% if (hours | int) == 0 and (minutes | int) == 0 and (seconds | int) > 0 %}
             {# Set the relative time to second(s). #}
-            {% set relative_time = seconds ~ iif(seconds == 1, ' second', ' seconds') %}
+            {% set rel_time = seconds ~ iif(seconds == 1, ' second', ' seconds') %}
           {% endif %}
           {% if (hours | int) == 0 and (minutes | int) > 0 %}
             {# Set the relative time to minute(s). #}
-            {% set relative_time = minutes ~ iif(minutes == 1, ' minute', ' minutes') %}
+            {% set rel_time = minutes ~ iif(minutes == 1, ' minute', ' minutes') %}
           {% endif %}
           {% if (hours | int) > 0 %}
             {# Set the relative time to hour(s). #}
-            {% set relative_time = hours ~ iif(hours == 1, ' hour', ' hours') %}
+            {% set rel_time = hours ~ iif(hours == 1, ' hour', ' hours') %}
           {% endif %}
         {% endif %}
         {# Add the expiring certificate entity_id and state to the dictionary array. #}
         {% set entities.data = entities.data + [{ 
             'host': host, 
             'port': port, 
-            'relative_time': relative_time, 
+            'rel_time': rel_time, 
             'is_valid': state_attr(state.entity_id, 'is_valid'), 
-            'error': 'certificate expires in {{ relative_time }}',
+            'error': 'certificate expires in ' ~ rel_time,
             'entity_id': state.entity_id, 
             'state': state.state }] %}
       {% endif %}
       {% if not state_attr(state.entity_id, 'is_valid') %}
-        {% set relative_time = '-1' %}
+        {% set rel_time = '-1' %}
         {% set entities.data = entities.data + [{ 
             'host': host, 
             'port': port, 
-            'relative_time': relative_time, 
+            'rel_time': rel_time, 
             'is_valid': state_attr(state.entity_id, 'is_valid'), 
             'error': state_attr(state.entity_id, 'error'),
             'entity_id': state.entity_id, 
